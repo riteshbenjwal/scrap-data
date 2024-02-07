@@ -1,24 +1,34 @@
 import requests
 from fastapi import HTTPException, Query
 from app.config import API_KEY, CSE_ID, MONGODB_URI
-from app.repository.db_repo import insert_search_results  
+from app.repository.db_repo import insert_search_results
+from app.utility.date_utils import get_date_range
 
-async def search_google(query: str, page: int = Query(1, alias="page"), start_date: str = None, end_date: str = None):
-    
+async def search_google(query: str, page: int = Query(1, alias="page"), from_date: str = None, to_date: str = None, time_range: str = None):
     search_url = "https://www.googleapis.com/customsearch/v1"
- # Calculate the start index based on the page number
+    # Calculate the start index based on the page number
     start_index = (page - 1) * 10 + 1
-
     params = {
         "key": API_KEY,
         "cx": CSE_ID,
         "q": query,
         "start": start_index,
     }
-    
-    # If date range is provided, add it to the search parameters
-    if start_date and end_date:
-        params["dateRestrict"] = f"d[{start_date},{end_date}]"
+    # Handle date range search
+    if time_range == "custom" and from_date and to_date:
+        # Custom date range specified by from_date and to_date
+        start_date_str, end_date_str = get_date_range(time_range, from_date, to_date)
+    elif time_range:
+        # Predefined time ranges like "Past month", "Past year", etc.
+        start_date_str, end_date_str = get_date_range(time_range)
+    else:
+        print("else")
+        start_date_str = end_date_str = None
+
+    if start_date_str and end_date_str:
+        params["sort"] = f"date:r:{start_date_str}:{end_date_str}"
+    # if start_date and end_date:
+    #     params["dateRestrict"] = f"d[{start_date},{end_date}]"
 
     response = requests.get(search_url, params=params)
 
