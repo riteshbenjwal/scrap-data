@@ -3,10 +3,7 @@ from fastapi import HTTPException, Query
 from app.config import API_KEY, CSE_ID, MONGODB_URI
 from app.repository.db_repo import insert_search_results
 from app.utility.date_utils import get_date_range
-# Corrected import statement for AsyncIOMotorClient
-from motor.motor_asyncio import AsyncIOMotorClient
 
-db = AsyncIOMotorClient('mongodb_uri').your_database
 async def search_google(query: str, page: int = Query(1, alias="page"), from_date: str = None, to_date: str = None, time_range: str = None):
     search_url = "https://www.googleapis.com/customsearch/v1"
     # Calculate the start index based on the page number
@@ -62,11 +59,3 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
         return response.json()
     else:
         raise HTTPException(status_code=response.status_code, detail=response.json())
-
-async def find_leaders_by_name(leader_name: str, page: int, page_size: int):
-    skip = (page - 1) * page_size
-    cursor = db.your_collection_name.find({"leader_name": leader_name}).skip(skip).limit(page_size)
-    results = await cursor.to_list(length=page_size)
-    if not results:
-        raise HTTPException(status_code=404, detail="Leader not found")
-    return results
