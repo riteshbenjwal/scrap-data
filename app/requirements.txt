@@ -1,0 +1,6 @@
+app==0.0.1
+fastapi==0.109.2
+pydantic==2.6.1
+pymongo==4.6.1
+python-dotenv==1.0.1
+Requests==2.31.0
