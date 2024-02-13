@@ -1,6 +1,6 @@
 import requests
 from fastapi import HTTPException, Query
-from app.config import API_KEY, CSE_ID, MONGODB_URI
+from app.config import API_KEY, CSE_ID
 from app.repository.db_repo import insert_search_results
 from app.utility.date_utils import get_date_range
 
