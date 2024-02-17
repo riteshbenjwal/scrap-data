@@ -3,12 +3,11 @@ from app.config import MONGODB_URI
 
 client = MongoClient(MONGODB_URI)
 db = client.get_database('cluster0')
-collection = db['search_results'] 
 
-
-def insert_search_results(search_results):
+def insert_search_results(collection_name, search_results):
     """
-    Inserts search results into the MongoDB collection.
+    Inserts search results into the specified MongoDB collection.
     """
     if search_results:
+        collection = db[collection_name]
         collection.insert_many(search_results)
