@@ -60,9 +60,9 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
     if response.status_code == 200:
         # Extract and store relevant information from items in the response
         items = response.json().get('items', [])
-        search_results = create_search_result_array(query,items)
-        if search_results:
-            insert_search_results(search_results)
+        # search_results = create_search_result_array(query,items)
+        # if search_results:
+        #     insert_search_results(search_results)
 
         return response.json()
     else:

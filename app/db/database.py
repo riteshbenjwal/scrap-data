@@ -1,7 +1,7 @@
 from app.config import MONGODB_URI
 import pyodbc
 
-print("Trying Connecting to SQL Server")
+# print("Trying Connecting to SQL Server")
 
 def get_db_connection():
     connection_str = (
@@ -32,4 +32,4 @@ def test_db_connection():
             cursor.close()
             connection.close()
 
-test_db_connection()
+# test_db_connection()
