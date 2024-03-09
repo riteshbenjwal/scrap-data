@@ -3,6 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import search_router
 
 
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from starlette.requests import Request
+
+
+
 allowed_origins = [
     "*" 
 ]
@@ -24,3 +30,16 @@ def read_root():
 
 # Include the router
 app.include_router(search_router.router)
+
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "status": False,
+            "message": exc.detail,
+            "data": []
+        },
+    )

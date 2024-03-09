@@ -30,6 +30,9 @@ def get_category_matched_id(domain):
     return getCategoryId('other')
 
 async def search_google(query: str, page: int = Query(1, alias="page"), from_date: str = None, to_date: str = None, time_range: str = None):
+    if not query:
+        raise HTTPException(status_code=400, detail="The leader_name parameter is required.")
+
     search_url = "https://www.googleapis.com/customsearch/v1"
     # Calculate the start index based on the page number
     start_index = (page - 1) * 10 + 1
@@ -54,20 +57,33 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
         params["sort"] = f"date:r:{start_date_str}:{end_date_str}"
     # if start_date and end_date:
     #     params["dateRestrict"] = f"d[{start_date},{end_date}]"
-
-    response = requests.get(search_url, params=params)
-
-    if response.status_code == 200:
-        # Extract and store relevant information from items in the response
+    try:
+        response = requests.get(search_url, params=params)
+        response.raise_for_status() 
         items = response.json().get('items', [])
-        # search_results = create_search_result_array(query,items)
-        # if search_results:
-        #     insert_search_results(search_results)
+        search_results = create_search_result_array(query,items)
+        if search_results:
+            # insert_search_results(search_results)
+            return {
+                "status": True,
+                "message": "Data fetched successfully",
+                "data": search_results
+            }       
+            
+         #return response.json()
+    except requests.exceptions.HTTPError as http_err:
+        return {
+            "status": False,
+            "message": f"HTTP error occurred: {http_err}",
+            "data": []
+        }
 
-        return response.json()
-    else:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
-
+    except  Exception as err:
+        return {
+            "status": False,
+            "message": f"An error occurred: {err}",
+            "data": []
+        }   
 
 def create_search_result_array(query,items):
     search_results = []
