@@ -31,7 +31,7 @@ def get_category_matched_id(domain):
 
 async def search_google(query: str, page: int = Query(1, alias="page"), from_date: str = None, to_date: str = None, time_range: str = None):
     if not query:
-        raise HTTPException(status_code=400, detail="The leader_name parameter is required.")
+        raise HTTPException(status_code=400, detail="The query parameter is required.")
 
     search_url = "https://www.googleapis.com/customsearch/v1"
     # Calculate the start index based on the page number
