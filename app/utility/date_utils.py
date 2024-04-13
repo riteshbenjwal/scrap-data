@@ -31,7 +31,12 @@ def get_date_range(time_range, from_date_str=None, to_date_str=None):
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365)  # Approximation
     else:
-        return None, None  # Unsupported time range
+   # Default case: Sort from last week to today
+        now = datetime.now()
+        start_date = now - timedelta(weeks=1)
+        end_date = now
+        print("Default time range applied: Last week to today.")
+
 
     # Format dates to YYYYMMDD
     start_date_str = format_date(start_date)
