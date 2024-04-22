@@ -9,3 +9,4 @@ uvicorn
 pyodbc
 httpx
 asyncio
+backoff
