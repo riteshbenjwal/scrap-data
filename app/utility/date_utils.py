@@ -14,10 +14,9 @@ def parse_custom_date(from_date_str, to_date_str):
 def get_date_range(time_range, from_date_str=None, to_date_str=None):
     print(time_range, from_date_str, to_date_str)
     """Calculate start and end dates for given time range."""
-    if time_range == "custom" and from_date_str and to_date_str:
+    if time_range == "Custom" and from_date_str and to_date_str:
         # Parse custom date range
         start_date, end_date = parse_custom_date(from_date_str, to_date_str)
-        print("===========",start_date, end_date)
     elif time_range == "Past 24 hours":
         end_date = datetime.now()  # Current date and time
         start_date = end_date - timedelta(days=1)
@@ -30,6 +29,9 @@ def get_date_range(time_range, from_date_str=None, to_date_str=None):
     elif time_range == "Past year":
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365)  # Approximation
+    elif time_range == "Past hour":
+        end_date = datetime.now()
+        start_date = datetime.now() - timedelta(hours=1)   
     else:
    # Default case: Sort from last week to today
         now = datetime.now()

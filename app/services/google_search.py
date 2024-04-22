@@ -1,4 +1,6 @@
-import requests
+import backoff
+import httpx
+import asyncio
 from fastapi import HTTPException, Query
 from app.config import API_KEY, CSE_ID
 from app.repository.tbl_news import insert_search_results
@@ -29,61 +31,99 @@ def get_category_matched_id(domain):
             return getCategoryId(platform)
     return getCategoryId('other')
 
-async def search_google(query: str, page: int = Query(1, alias="page"), from_date: str = None, to_date: str = None, time_range: str = None):
-    if not query:
-        raise HTTPException(status_code=400, detail="The query parameter is required.")
 
-    search_url = "https://www.googleapis.com/customsearch/v1"
-    # Calculate the start index based on the page number
-    start_index = (page - 1) * 10 + 1
+# @backoff.on_exception(
+#     backoff.expo,
+#     (httpx.HTTPError, httpx.RequestError),
+#     max_tries=5,  # Define max number of tries
+#     giveup=lambda e: e.response and e.response.status_code < 500
+# )
+async def fetch_search_results(client, query, page_number, API_KEY, CSE_ID, time_range, from_date, to_date):
+    start_index = (page_number - 1) * 10 + 1
+    # some issue with env will move this to env
     params = {
-        "key": API_KEY,
-        "cx": CSE_ID,
+        "key": "AIzaSyAkJk6rhIvjKkRGQPy8H8YTBfC-yhdHOKs",
+        "cx": "b6f1294e3216948a8",
         "q": query,
         "start": start_index,
     }
-    # Handle date range search
-    if time_range == "custom" and from_date and to_date:
-        # Custom date range specified by from_date and to_date
+
+    if time_range == "Custom" and from_date and to_date:
         start_date_str, end_date_str = get_date_range(time_range, from_date, to_date)
     elif time_range:
-        # Predefined time ranges like "Past month", "Past year", etc.
         start_date_str, end_date_str = get_date_range(time_range)
     else:
-        print("else")
         start_date_str = end_date_str = None
 
     if start_date_str and end_date_str:
         params["sort"] = f"date:r:{start_date_str}:{end_date_str}"
-    # if start_date and end_date:
-    #     params["dateRestrict"] = f"d[{start_date},{end_date}]"
-    try:
-        response = requests.get(search_url, params=params)
-        response.raise_for_status() 
-        items = response.json().get('items', [])
-        search_results = create_search_result_array(query,items)
-        if search_results:
-            # insert_search_results(search_results)
-            return {
-                "status": True,
-                "message": "Data fetched successfully",
-                "data": search_results
-            }       
-            
-         #return response.json()
-    except requests.exceptions.HTTPError as http_err:
-        return {
-            "status": False,
-            "message": f"HTTP error occurred: {http_err}",
-            "data": []
+
+    response = await client.get("https://www.googleapis.com/customsearch/v1", params=params)
+    response.raise_for_status()
+    return response.json()
+
+async def search_google(query: str, page: int = Query(1, alias="page"), from_date: str = None, to_date: str = None,
+                        time_range: str = None, twitter_handle=None, facebook_id=None, instagram_id=None, youtube_id=None):
+    if not query:
+        raise HTTPException(status_code=400, detail="The query parameter is required.")
+
+    all_search_results = []
+    tasks = []
+    social_results = {'facebook': [], 'twitter': [], 'instagram': [], 'youtube': []}
+
+
+    async with httpx.AsyncClient() as client:
+        for page_number in range(1, page + 1):
+            task = fetch_search_results(client, query, page_number, API_KEY, CSE_ID, time_range, from_date, to_date)
+            tasks.append(task)
+
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for response in responses:
+            if isinstance(response, Exception):
+                print(f"An error occurred: {response}")
+                continue  # Skip this response and continue with the next
+
+            items = response.get('items', [])
+            if items:
+                search_results = create_search_result_array(query, items)
+                if search_results:
+                    all_search_results.extend(search_results)
+
+        # Prepare for social media queries
+        social_queries = {
+            'facebook': f"site:https://www.facebook.com/{facebook_id}" if facebook_id else None,
+            'twitter': f"site:https://twitter.com/{twitter_handle}" if twitter_handle else None,
+            'instagram': f"site:https://www.instagram.com/{instagram_id}" if instagram_id else None,
+            'youtube': f"site:https://www.youtube.com/{youtube_id}" if youtube_id else None
         }
 
-    except  Exception as err:
-        return {
-            "status": False,
-            "message": f"An error occurred: {err}",
-            "data": []
-        }   
+        tasks_social = []
+        
+        for platform, social_query in social_queries.items():
+            if social_query:
+                task = fetch_search_results(client, social_query, 1, API_KEY, CSE_ID, None, None, None)
+                tasks_social.append((platform, task))
+
+        social_responses = await asyncio.gather(*[task[1] for task in tasks_social if task], return_exceptions=True)
+
+        for i, response in enumerate(social_responses):
+            platform = tasks_social[i][0]
+            if isinstance(response, Exception):
+                print(f"An error occurred in {platform} search: {response}")
+                continue
+
+            items = response.get('items', [])
+            if items:
+                social_results[platform].extend(create_search_result_array(query, items))
+
+    return {
+        "status": True if all_search_results or any(social_results[plat] for plat in social_results) else False,
+        "message": "Data fetched successfully" if all_search_results or any(social_results[plat] for plat in social_results) else "No data found",
+        "data": all_search_results,
+        **social_results
+    }
+
 
 def create_search_result_array(query,items):
     search_results = []

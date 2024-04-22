@@ -7,3 +7,5 @@ Requests==2.31.0
 uvicorn[standard]
 uvicorn
 pyodbc
+httpx
+asyncio
