@@ -63,7 +63,7 @@ async def fetch_search_results(client, query, page_number, API_KEY, CSE_ID, time
     return response.json()
 
 async def search_google(query: str, page: int = Query(1, alias="page"), from_date: str = None, to_date: str = None,
-                        time_range: str = None, twitter_handle=None, facebook_id=None, instagram_id=None, youtube_id=None):
+                        time_range: str = None, twitter_handle=None, facebook_id=None, instagram_id=None, youtube_id=None, extra_query= None):
     if not query:
         raise HTTPException(status_code=400, detail="The query parameter is required.")
 
@@ -74,7 +74,11 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
 
     async with httpx.AsyncClient() as client:
         for page_number in range(1, page + 1):
-            task = fetch_search_results(client, query, page_number, API_KEY, CSE_ID, time_range, from_date, to_date)
+            if extra_query:
+                full_query = f"{query} {extra_query}"
+            else:
+                full_query = query    
+            task = fetch_search_results(client, full_query, page_number, API_KEY, CSE_ID, time_range, from_date, to_date)
             tasks.append(task)
 
         responses = await asyncio.gather(*tasks, return_exceptions=True)
