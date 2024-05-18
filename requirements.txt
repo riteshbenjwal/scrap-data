@@ -10,3 +10,4 @@ pyodbc
 httpx
 asyncio
 backoff
+beautifulsoup4

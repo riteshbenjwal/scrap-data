@@ -6,6 +6,15 @@ from app.config import API_KEY, CSE_ID
 from app.repository.tbl_news import insert_search_results
 from app.utility.date_utils import get_date_range
 from urllib.parse import urlparse
+from bs4 import BeautifulSoup
+import hashlib
+from datetime import datetime, timedelta, timezone
+from app import app
+
+
+# Cache dictionary to store cached results
+cache = {}
+CACHE_EXPIRATION_SECONDS = 300  # Cache expiration time (5 minutes)
 
 category_ids = {
     "facebook": 1,
@@ -31,6 +40,12 @@ def get_category_matched_id(domain):
             return getCategoryId(platform)
     return getCategoryId('other')
 
+
+
+def generate_cache_key(query, page_number, time_range, from_date, to_date):
+    """Generate a unique cache key based on query parameters."""
+    key = f"{query}_{page_number}_{time_range}_{from_date}_{to_date}"
+    return hashlib.md5(key.encode()).hexdigest()
 
 # @backoff.on_exception(
 #     backoff.expo,
@@ -66,6 +81,18 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
                         time_range: str = None, twitter_handle=None, facebook_id=None, instagram_id=None, youtube_id=None, extra_query= None):
     if not query:
         raise HTTPException(status_code=400, detail="The query parameter is required.")
+    
+    cache_key = generate_cache_key(query, page, time_range, from_date, to_date)
+
+        # Check if the result is cached
+    if cache_key in cache:
+        cached_entry = cache[cache_key]
+        print('Returning from Cache now')
+        if cached_entry["expires_at"] > datetime.now(timezone.utc):
+            return cached_entry["result"]
+
+    print("First Time Fetching")   
+        
 
     all_search_results = []
     tasks = []
@@ -90,7 +117,8 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
 
             items = response.get('items', [])
             if items:
-                search_results = create_search_result_array(query, items)
+                search_results = create_search_result_array(query, items)    # Scrape content from the URLs
+                await add_web_content(search_results)                
                 if search_results:
                     all_search_results.extend(search_results)
 
@@ -121,12 +149,20 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
             if items:
                 social_results[platform].extend(create_search_result_array(query, items))
 
-    return {
+    result = {
         "status": True if all_search_results or any(social_results[plat] for plat in social_results) else False,
         "message": "Data fetched successfully" if all_search_results or any(social_results[plat] for plat in social_results) else "No data found",
         "data": all_search_results,
         **social_results
     }
+
+    # Cache the result
+    cache[cache_key] = {
+        "result": result,
+        "expires_at": datetime.now(timezone.utc) + timedelta(seconds=CACHE_EXPIRATION_SECONDS)
+    }
+
+    return result
 
 
 def create_search_result_array(query,items):
@@ -179,3 +215,40 @@ def create_search_result_array(query,items):
    
    
     return search_results    
+
+
+
+async def scrape_content_from_url(url):
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        # Extract the entire page content as text
+        web_content = soup.get_text(separator=' ')
+        return web_content
+
+
+async def add_web_content(search_results):
+    valid_results = [result for result in search_results if is_valid_url(result['url'])]
+    tasks = [scrape_and_add_content(result) for result in valid_results]
+    await asyncio.gather(*tasks)
+
+
+async def scrape_and_add_content(result):
+    try:
+        content = await scrape_content_from_url(result['url'])
+        result['web_content'] = content
+    except Exception as e:
+        print(f"Error scraping {result['url']}: {e}")
+        result['web_content'] = None
+
+def is_valid_url(url):
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in ['http', 'https']:
+        return False
+    if parsed_url.netloc == '':
+        return False
+    file_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.zip', '.rar', '.7z', '.tar', '.gz']
+    if any(url.lower().endswith(ext) for ext in file_extensions):
+        return False
+    return True        
