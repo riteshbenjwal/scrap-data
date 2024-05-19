@@ -1,4 +1,3 @@
-import backoff
 import httpx
 import asyncio
 from fastapi import HTTPException, Query
@@ -30,8 +29,9 @@ def getCategoryId(name):
 social_media_domains = {
     'instagram': ['instagram.com', 'instagr.am', 'help.instagram.com', 'm.instagram.com', 'ig.me', 'applink.instagram.com', 'call.instagram.com'],
     'facebook': ['facebook.com', 'fb.com', 'messenger.com'],
-    'twitter': ['twitter.com', 't.co'],
+    'twitter': ['twitter.com', 't.co','x.com'],
     'linkedin': ['linkedin.com', 'linkedin.in'],
+    'youtube':['youtube.com']
 }
 
 def get_category_matched_id(domain):
@@ -123,11 +123,18 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
                     all_search_results.extend(search_results)
 
         # Prepare for social media queries
+        # social_queries = {
+        #     'facebook': f"site:https://www.facebook.com/{facebook_id}" if facebook_id else None,
+        #     'twitter': f"site:https://twitter.com/{twitter_handle}" if twitter_handle else None,
+        #     'instagram': f"site:https://www.instagram.com/{instagram_id}" if instagram_id else None,
+        #     'youtube': f"site:https://www.youtube.com/{youtube_id}" if youtube_id else None
+        # }
+
         social_queries = {
-            'facebook': f"site:https://www.facebook.com/{facebook_id}" if facebook_id else None,
-            'twitter': f"site:https://twitter.com/{twitter_handle}" if twitter_handle else None,
-            'instagram': f"site:https://www.instagram.com/{instagram_id}" if instagram_id else None,
-            'youtube': f"site:https://www.youtube.com/{youtube_id}" if youtube_id else None
+            'facebook': f"{facebook_id} facebook.com" if facebook_id else None,
+            'twitter': f"{twitter_handle} twitter.com" if twitter_handle else None,
+            'instagram': f"{instagram_id} instagram.com" if instagram_id else None,
+            'youtube': f"{youtube_id} youtube.com" if youtube_id else None
         }
 
         tasks_social = []
@@ -147,7 +154,7 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
 
             items = response.get('items', [])
             if items:
-                social_results[platform].extend(create_search_result_array(query, items))
+                social_results[platform].extend(create_filtered_search_results(query, items,platform))
 
     result = {
         "status": True if all_search_results or any(social_results[plat] for plat in social_results) else False,
@@ -163,6 +170,20 @@ async def search_google(query: str, page: int = Query(1, alias="page"), from_dat
     }
 
     return result
+
+
+def is_valid_platform_url(url, platform):
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc
+    return any(d in domain for d in social_media_domains[platform])
+
+def create_filtered_search_results(query, items, platform):
+    filtered_results = []
+    for item in items:
+        url = item.get('link')
+        if is_valid_platform_url(url, platform):
+            filtered_results.append(item)
+    return create_search_result_array(query, filtered_results)
 
 
 def create_search_result_array(query,items):
